@@ -5,11 +5,9 @@ import { parsedUser } from "../utils/tokenResponse.js";
 
 export const addUser = asyncHandler(async (req, res, next) => {
   try {
-    const { email, phone } = req.body;
+    const { email } = req.body;
 
-    const existinUser = await User.findOne({
-      $or: [{ email }, { phone }],
-    });
+    const existinUser = await User.findOne({ email });
 
     if (existinUser) {
       return next(
@@ -37,9 +35,12 @@ export const addUser = asyncHandler(async (req, res, next) => {
 });
 
 export const getAllUsers = asyncHandler(async (req, res, next) => {
-  const { isActive } = req.query;
+  const { isActive, role } = req.query;
   try {
-    const filters = isActive == 1 ? { isActive: true } : {};
+    const filters = {};
+    if (isActive == 1) filters.isActive = true;
+    if (role) filters.role = role;
+
     const users = await User.find(filters);
 
     res.status(200).json({

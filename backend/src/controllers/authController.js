@@ -76,7 +76,7 @@ export const login = asyncHandler(async (req, res, next) => {
     }
 
     if (!isTokenValid) {
-      user.token = user.getSignedToken();
+      user.token = user.generateAuthToken();
       await user.save();
     }
 
@@ -99,6 +99,7 @@ export const logout = asyncHandler(async (req, res, next) => {
   try {
     req.user.token = "";
     await req.user.save();
+
     res
       .status(200)
       .clearCookie("token")

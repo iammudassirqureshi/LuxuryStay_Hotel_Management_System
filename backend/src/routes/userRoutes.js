@@ -11,6 +11,7 @@ import { uploadImage } from "../utils/uploadManager.js";
 
 const router = express.Router();
 
+// add user or staff
 router.post(
   "/add",
   [protect],
@@ -18,7 +19,11 @@ router.post(
   uploadImage.single("picture"),
   addUser
 );
+
+// get all users or staff
 router.get("/", [protect], authorize("admin"), getAllUsers);
+
+// update user or staff data
 router.put(
   "/update",
   [protect],
@@ -26,7 +31,11 @@ router.put(
   uploadImage.single("picture"),
   updateUser
 );
+
+// deactivate user or staff account
 router.put("/deactivate", [protect], authorize("admin"), deactivateUser);
+
+// delete user or staff account
 router.delete("/delete", [protect], authorize("admin"), deleteUser);
 
 export default router;

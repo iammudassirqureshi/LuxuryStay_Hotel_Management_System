@@ -25,8 +25,8 @@ if (process.env.NODE_ENV === "development") {
 }
 
 // Define routes
-app.use("/api/admin", adminRoutes);
 app.use("/api/auth", authRoutes);
+app.use("/api/admin", adminRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/rooms", roomRoutes);
 

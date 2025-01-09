@@ -11,12 +11,151 @@ dotenv.config();
 import Stripe from "stripe";
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
-export const roomReservation = asyncHandler(async (req, res, next) => {
+// add room
+export const addRoom = asyncHandler(async (req, res, next) => {
   try {
-    const { roomId, checkInDate, checkOutDate } = req.body;
-    if (!roomId || !checkInDate || !checkOutDate) {
+    const { roomNumber, type, size, bedSize, view, price, amenities } =
+      req.body;
+
+    if (!roomNumber || !type || !size || !bedSize || !view || !price) {
       return next(
         new errorResponse("Please provide all required fields", 400, {
+          type: "REQUIRED_FIELDS",
+        })
+      );
+    }
+
+    const roomExists = await Room.findOne({ roomNumber });
+    if (roomExists) {
+      return next(
+        new errorResponse("Room already exists", 400, {
+          type: "ROOM_EXISTS",
+        })
+      );
+    }
+
+    if (!req.files.thumbnail || !req.files.pictures) {
+      return next(
+        new errorResponse("Please upload thumbnail or pictures", 400, {
+          type: "PICTURES_REQUIRED",
+        })
+      );
+    }
+
+    req.body.amenities = JSON.parse(amenities);
+
+    req.body.thumbnail = req.files ? req.files.thumbnail[0].filename : "";
+    req.body.pictures = req.files
+      ? req.files.pictures.map((picture) => picture.filename)
+      : [];
+
+    const room = await Room.create(req.body);
+    res.status(201).json({
+      success: true,
+      message: "Room added successfully",
+      data: parsedRoom(room),
+    });
+  } catch (error) {
+    console.error(error);
+    return next(new errorResponse("Server error", 500));
+  }
+});
+
+// update room status
+export const updateRoomStatus = asyncHandler(async (req, res, next) => {
+  try {
+    const { roomId, status } = req.body;
+    if (!roomId && !status) {
+      return next(
+        new errorResponse("Please provide roomId and status", 400, {
+          type: "REQUIRED_FIELDS",
+        })
+      );
+    }
+
+    const room = await Room.findOne({ _id: roomId });
+    if (!room) {
+      return next(
+        new errorResponse("Room not found", 404, {
+          type: "ROOM_NOT_FOUND",
+        })
+      );
+    }
+
+    room.status = status;
+    await room.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Room status updated successfully",
+      data: parsedRoom(room),
+    });
+  } catch (error) {
+    console.error(error);
+    return next(new errorResponse("Server error", 500));
+  }
+});
+
+// update room details
+export const updateRoom = asyncHandler(async (req, res, next) => {
+  try {
+    const { roomId, ...updateData } = req.body;
+    if (!roomId) {
+      return next(
+        new errorResponse("Please provide roomId", 400, {
+          type: "REQUIRED_FIELDS",
+        })
+      );
+    }
+
+    if (req.body.amenities) {
+      updateData.amenities = JSON.parse(req.body.amenities);
+    }
+
+    if (req.files.thumbnail) {
+      updateData.thumbnail = req.files.thumbnail[0].filename;
+    }
+
+    if (req.files.pictures) {
+      const existingRoom = await Room.findById(roomId); // Retrieve the current room
+      updateData.pictures = [
+        ...(existingRoom?.pictures || []).filter(
+          (pic) => !(req.body.removePictures || []).includes(pic) // Remove specified pictures
+        ),
+        ...req.files.pictures.map((picture) => picture.filename), // Add new ones
+      ];
+    }
+
+    const room = await Room.findByIdAndUpdate(
+      { _id: roomId },
+      { $set: updateData },
+      { new: true, runValidators: true }
+    );
+
+    if (!room) {
+      return next(
+        new errorResponse("Room not found", 404, { type: "ROOM_NOT_FOUND" })
+      );
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Room updated successfully",
+      data: parsedRoom(room),
+    });
+  } catch (error) {
+    console.error(error);
+    return next(new errorResponse("Server error", 500));
+  }
+});
+
+// delete room
+export const deleteRoom = asyncHandler(async (req, res, next) => {
+  try {
+    const { roomId } = req.query;
+    if (!roomId) {
+      return next(
+        new errorResponse("Please provide roomId", 400, {
           type: "REQUIRED_FIELDS",
         })
       );
@@ -29,18 +168,10 @@ export const roomReservation = asyncHandler(async (req, res, next) => {
       );
     }
 
-    const reservation = await Reservation.create({
-      guest: req.user._id,
-      room: roomId,
-      checkInDate,
-      checkOutDate,
-      totalAmount: room.price,
-    });
-
-    res.status(201).json({
+    await room.deleteOne({ _id: roomId });
+    res.status(200).json({
       success: true,
-      message: "Room reserved successfully",
-      data: reservation,
+      message: "Room deleted successfully",
     });
   } catch (error) {
     console.error(error);
@@ -48,6 +179,7 @@ export const roomReservation = asyncHandler(async (req, res, next) => {
   }
 });
 
+// get all rooms
 export const getAllRooms = asyncHandler(async (req, res, next) => {
   const {
     status,
@@ -90,6 +222,7 @@ export const getAllRooms = asyncHandler(async (req, res, next) => {
   }
 });
 
+// get single room by id
 export const getRoomById = asyncHandler(async (req, res, next) => {
   try {
     const { roomId } = req.query;
@@ -106,6 +239,43 @@ export const getRoomById = asyncHandler(async (req, res, next) => {
       success: true,
       message: "Room fetched successfully",
       data: parsedRoom(room),
+    });
+  } catch (error) {
+    console.error(error);
+    return next(new errorResponse("Server error", 500));
+  }
+});
+
+export const roomReservation = asyncHandler(async (req, res, next) => {
+  try {
+    const { roomId, checkInDate, checkOutDate } = req.body;
+    if (!roomId || !checkInDate || !checkOutDate) {
+      return next(
+        new errorResponse("Please provide all required fields", 400, {
+          type: "REQUIRED_FIELDS",
+        })
+      );
+    }
+
+    const room = await Room.findById(roomId);
+    if (!room) {
+      return next(
+        new errorResponse("Room not found", 404, { type: "ROOM_NOT_FOUND" })
+      );
+    }
+
+    const reservation = await Reservation.create({
+      guest: req.user._id,
+      room: roomId,
+      checkInDate,
+      checkOutDate,
+      totalAmount: room.price,
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "Room reserved successfully",
+      data: reservation,
     });
   } catch (error) {
     console.error(error);

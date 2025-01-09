@@ -58,21 +58,11 @@ UserSchema.pre("save", async function (next) {
   next();
 });
 
-// Generate JWT token automatically before saving user to database
-UserSchema.pre("save", async function (next) {
-  if (!this.token) {
-    this.token = jwt.sign({ id: this._id.toString() }, process.env.JWT_SECRET, {
-      expiresIn: process.env.JWT_EXPIRE,
-    });
-  }
-  return next();
-});
-
-// Sign JWT and return
-UserSchema.methods.getSignedToken = function () {
-  return jwt.sign({ id: this._id }, process.env.JWT_SECRET, {
+UserSchema.methods.generateAuthToken = function () {
+  this.token = jwt.sign({ id: this._id.toString() }, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRE,
   });
+  return this.token;
 };
 
 // Match user entered password to hashed password in database
